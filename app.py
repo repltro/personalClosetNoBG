@@ -2,8 +2,6 @@ import os
 import sqlite3
 import requests
 from flask import Flask, render_template, request, redirect, url_for, jsonify
-from PIL import Image
-from rembg import remove
 import urllib.parse
 
 app = Flask(__name__)
@@ -91,10 +89,23 @@ CATEGORIES = {
     'Sweater': 'Tops'
 }
 
-# Function to remove background from image
-def remove_background(image_data):
-    output_data = remove(image_data)
-    return output_data
+# Function to remove background using an external API
+def remove_background(image_path):
+    api_key = 'your_remove_bg_api_key_here'
+    response = requests.post(
+        'https://api.remove.bg/v1.0/removebg',
+        files={'image_file': open(image_path, 'rb')},
+        data={'size': 'auto'},
+        headers={'X-Api-Key': api_key}
+    )
+    if response.status_code == 200:
+        output_path = os.path.splitext(image_path)[0] + '_no_bg.png'
+        with open(output_path, 'wb') as output_file:
+            output_file.write(response.content)
+        return output_path
+    else:
+        print("Error:", response.status_code, response.text)
+        return None
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -116,14 +127,9 @@ def index():
         else:
             return redirect(url_for('index'))
 
-        output_path = os.path.join('static/uploads', 'bg_' + os.path.basename(input_path))
-        with open(input_path, 'rb') as input_file:
-            input_data = input_file.read()
-            output_data = remove_background(input_data)
-            with open(output_path, 'wb') as output_file:
-                output_file.write(output_data)
-
-        add_clothing_item('bg_' + os.path.basename(input_path), clothing_type, CATEGORIES[clothing_type])
+        output_path = remove_background(input_path)
+        if output_path:
+            add_clothing_item(os.path.basename(output_path), clothing_type, CATEGORIES[clothing_type])
 
         return redirect(url_for('index'))
 
